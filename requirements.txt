@@ -1,6 +1,6 @@
 BeautifulSoup==3.2.1
 Jinja2==2.7.2
-Magic-file-extensions==0.2
+python-magic
 MarkupSafe==0.18
 MySQL-python==1.2.5
 PyYAML==3.10

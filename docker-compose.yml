@@ -1,0 +1,35 @@
+version: '2'
+services:
+    mysql:
+        image: mysql:latest
+        environment:
+           MYSQL_ROOT_PASSWORD: ${MYSQL_ENV_MYSQL_ROOT_PASSWORD}
+           MYSQL_DATABASE: ${MYSQL_ENV_POSTGRES_DB}
+           MYSQL_USER: ${MYSQL_ENV_MYSQL_USER}
+           MYSQL_PASSWORD: ${MYSQL_ENV_MYSQL_PASSWORD}
+           STARTUP_SQL: 'fixtures/000_base_structure.sql'
+        networks:
+          poolnet:
+           ipv4_address: 172.1.0.2
+        ports:
+          - "127.0.0.1:3306:3306"
+        restart: always
+    pool:
+        image: stratum-mining
+        volumes:
+            - ./stratum-mining:/root/stratum-mining
+        networks:
+          poolnet:
+           ipv4_address: 172.1.0.3
+        ports:
+          - "3333:3333"
+        command: ["/bin/bash", "-c" , "/root/stratum-mining/entrypoint.sh"]
+        restart: always
+networks:
+  poolnet:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+      - subnet: 172.1.0.0/24
+        gateway: 172.1.0.1
