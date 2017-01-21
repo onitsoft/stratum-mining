@@ -12,7 +12,6 @@ RUN apt-get update && apt-get install -y \
     build-essential
 
 ADD . /root/stratum-mining
-RUN easy_install -U distribute
 RUN cd /root/stratum-mining \
     && git submodule init \
     && git submodule update
@@ -22,6 +21,9 @@ RUN cd /root/stratum-mining/externals/stratum \
     && python setup.py install \
     && cd /root/stratum-mining
 RUN chmod +x /root/stratum-mining/entrypoint.sh
+
+RUN easy_install -U distribute
+
 
 RUN sed -i '0,/re/s/autobahn.websocket/autobahn.twisted.websocket/g' /usr/local/lib/python2.7/site-packages/stratum-0.2.13-py2.7.egg/stratum/websocket_transport.py
 
