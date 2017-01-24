@@ -145,10 +145,10 @@ class BitcoinRPC(object):
             try:
                 if algo==0:
                     resp = (yield self._call('getauxblock', []))
-		    log.exception("AUX HASH %s" % str(resp))
+		    log.debug("AUX HASH %s" % str(resp))
                 else:
                     resp = (yield self._call('getauxblock', ['1',]))
-		    log.exception("AUX HASH %s" % str(resp))
+		    log.debug("AUX HASH %s" % str(resp))
                 defer.returnValue(json.loads(resp)['result'])
             except Exception as e:
                 raise
