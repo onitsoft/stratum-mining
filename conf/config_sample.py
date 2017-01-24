@@ -39,6 +39,12 @@ COINDAEMON_TX = 'no'
 #COINDAEMON_TRUSTED_USER_2 = 'user'
 #COINDAEMON_TRUSTED_PASSWORD_2 = 'somepassword'
 
+# ******************* Merge Mining Coin ***************
+MM_HOST = 'localhost'
+MM_PORT = 8332
+MM_USER = 'user'
+MM_PASSWORD = 'somepassword'
+
 # ******************** GENERAL SETTINGS ***************
 # Set process name of twistd, much more comfortable if you run multiple processes on one machine
 STRATUM_MINING_PROCESS_NAME= 'twistd-stratum-mining'

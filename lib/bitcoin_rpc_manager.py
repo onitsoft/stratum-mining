@@ -18,9 +18,11 @@ from lib.bitcoin_rpc import BitcoinRPC
 
 class BitcoinRPCManager(object):
     
-    def __init__(self):
+    def __init__(self,host=None,port=None,user=None,passwd=None):
         log.debug("Got to Bitcoin RPC Manager")
         self.conns = {}
+
+        if host is None or port is None or user is None or passwd is None:
         self.conns[0] = BitcoinRPC(settings.COINDAEMON_TRUSTED_HOST,
                                  settings.COINDAEMON_TRUSTED_PORT,
                                  settings.COINDAEMON_TRUSTED_USER,
@@ -32,6 +34,9 @@ class BitcoinRPCManager(object):
                                 settings.__dict__['COINDAEMON_TRUSTED_PORT_' + str(x)],
                                 settings.__dict__['COINDAEMON_TRUSTED_USER_' + str(x)],
                                 settings.__dict__['COINDAEMON_TRUSTED_PASSWORD_' + str(x)])
+        else:
+            self.conns[0] = BitcoinRPC(host,port,user,passwd)
+            self.curr_conn = 0
 
     def add_connection(self, host, port, user, password):
         # TODO: Some string sanity checks
@@ -117,6 +122,22 @@ class BitcoinRPCManager(object):
                return self.conns[self.curr_conn].getblocktemplate()
             except:
                 self.next_connection()
+
+    def getauxblock(self,mm_hash=None,mm_submission=None,algo=0):
+        while True:
+            if mm_hash is None or mm_submission is None:
+                try:
+                    if algo==0:
+                        return self.conns[self.curr_conn].getauxblock()
+                    else:
+                        return self.conns[self.curr_conn].getauxblock(algo=1)
+                except:
+                    self.next_connection()
+            else:
+                try:
+                    return self.conns[self.curr_conn].getauxblock(mm_hash,mm_submission)
+                except:
+                    self.next_connection()
 
     def prevhash(self):
         self.check_height()

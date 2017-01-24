@@ -39,8 +39,7 @@ class TemplateRegistry(object):
     '''Implements the main logic of the pool. Keep track
     on valid block templates, provide internal interface for stratum
     service and implements block validation and submits.'''
-    
-    def __init__(self, block_template_class, coinbaser, bitcoin_rpc, instance_id,
+    def __init__(self, block_template_class, coinbaser, bitcoin_rpc, mm_rpc, instance_id,
                  on_template_callback, on_block_callback):
         self.prevhashes = {}
         self.jobs = weakref.WeakValueDictionary()
@@ -52,15 +51,29 @@ class TemplateRegistry(object):
         self.coinbaser = coinbaser
         self.block_template_class = block_template_class
         self.bitcoin_rpc = bitcoin_rpc
+        self.mm_rpc = mm_rpc
         self.on_block_callback = on_block_callback
         self.on_template_callback = on_template_callback
         
         self.last_block = None
         self.update_in_progress = False
+        self.update_mm_in_progress = False
         self.last_update = None
+        self.last_update_mm = None
+
+        self.mm_hash = ""
+        self.mm_script = ""
+        self.mm_target = None
+        self.last_height = None
+
+        if settings.COINDAEMON_ALGO == 'scrypt':
+            self.algo = 1
+        else:
+            self.algo = 0
         
         # Create first block template on startup
         self.update_block()
+        self.update_mm_block()
         
     def get_new_extranonce1(self):
         '''Generates unique extranonce1 (e.g. for newly
@@ -139,7 +152,8 @@ class TemplateRegistry(object):
         start = Interfaces.timestamper.time()
                 
         template = self.block_template_class(Interfaces.timestamper, self.coinbaser, JobIdGenerator.get_new_id())
-        log.info(template.fill_from_rpc(data))
+        log.info(template.fill_from_rpc(data,self.mm_script,self.mm_target))
+        self.last_height = data['height']
         self.add_template(template,data['height'])
 
         log.info("Update finished, %.03f sec, %d txes" % \
@@ -147,6 +161,29 @@ class TemplateRegistry(object):
         
         self.update_in_progress = False        
         return data
+
+    def update_mm_block(self):
+        if self.update_mm_in_progress:
+            return
+        self.update_mm_in_progress = True
+        self.last_update_mm = Interfaces.timestamper.time()
+        d = self.mm_rpc.getauxblock(algo=self.algo)
+        d.addCallback(self._update_mm_block)
+        d.addErrback(self._update_mm_block_failed)
+
+    def _update_mm_block(self,data):
+        self.mm_hash = data['hash']
+        self.mm_script = ('fabe6d6d'+data['hash']+'01000000'+'00000000').decode('hex')
+        target = data['target'].decode('hex')[::-1].encode('hex')
+        self.mm_target = int(target,16)
+        self.update_mm_in_progress = False
+        self.update_block()
+        return data
+
+    def _update_mm_block_failed(self,failure):
+        log.error(str(failure))
+        self.update_mm_in_progress = False
+        
     
     def diff_to_target(self, difficulty):
         '''Converts difficulty to target'''
@@ -295,6 +332,9 @@ class TemplateRegistry(object):
         # Algebra tells us the diff_to_target is the same as hash_to_diff
         share_diff = int(self.diff_to_target(hash_int))
 
+        on_submit = None
+        mm_submit = None
+
         # 5. Compare hash with target of the network
         isBlockCandidate = False
         if settings.COINDAEMON_ALGO == 'riecoin':
@@ -332,6 +372,27 @@ class TemplateRegistry(object):
                 return (header_hex, block_hash_hex, share_diff, on_submit)
             else:
                 return (header_hex, scrypt_hash_hex, share_diff, on_submit)
+
+        # 8. Compare hash with target of mm network
+        if hash_int <= job.mm_target:
+            log.info("We found a mm block candidate! %s" % scrypt_hash_hex)
+            coinbase_hex = binascii.hexlify(coinbase_bin)
+            branch_count = job.merkletree.branchCount()
+            branch_hex = job.merkletree.branchHex()
+            parent_hash = util.rev("%064x" % hash_int)
+            parent_header = util.flip(header_hex)
+            submission = coinbase_hex + parent_hash + branch_count + branch_hex + "000000000000000000" + parent_header;
+            mm_submit = self.mm_rpc.getauxblock(self.mm_hash,submission)
+
+            log.debug("Coinbase:%s",coinbase_hex)
+            log.debug("Branch Count:%s",branch_count)
+            log.debug("Branch Hex:%s",branch_hex)
+            log.debug("Parent Hash:%s",parent_hash)
+            log.debug("Parent Header:%s",parent_header)
+            log.debug("MM Hash:%s",self.mm_hash)
+            log.debug("AuxPow:%s",submission)
+            log.debug("Res:"+str(mm_submit))
+
         
         if settings.SOLUTION_BLOCK_HASH:
         # Reverse the header and get the potential block hash (for scrypt only) only do this if we want to send in the block hash to the shares table
@@ -340,6 +401,7 @@ class TemplateRegistry(object):
             else:
 	        block_hash_bin = util.doublesha(''.join([ header_bin[i*4:i*4+4][::-1] for i in range(0, 20) ]))
             block_hash_hex = block_hash_bin[::-1].encode('hex_codec')
-            return (header_hex, block_hash_hex, share_diff, None)
+            return (header_hex, block_hash_hex, self.mm_hash, share_diff, on_submit, mm_submit)
         else:
-            return (header_hex, scrypt_hash_hex, share_diff, None)
+            return (header_hex, scrypt_hash_hex, self.mm_hash, share_diff, on_submit, mm_submit)
+
