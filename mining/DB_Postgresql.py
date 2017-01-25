@@ -117,6 +117,65 @@ class DB_Postgresql():
         self.dbh.commit()
 
 
+    def mimport_shares(self,data):
+        log.debug("Importing Shares MM")
+#               0           1            2          3          4         5        6  7            8         9              10
+#        data: [worker_name,block_header,block_hash,difficulty,timestamp,is_valid,ip,block_height,prev_hash,invalid_reason,best_diff]
+        checkin_times = {}
+        total_shares = 0
+        best_diff = 0
+        for k,v in enumerate(data):
+            if settings.DATABASE_EXTEND :
+                total_shares += v[3]
+                if v[0] in checkin_times:
+                    if v[4] > checkin_times[v[0]] :
+                        checkin_times[v[0]]["time"] = v[4]
+                else:
+                    checkin_times[v[0]] = {"time": v[4], "shares": 0, "rejects": 0 }
+
+                if v[5] == True :
+                    checkin_times[v[0]]["shares"] += v[3]
+                else :
+                    checkin_times[v[0]]["rejects"] += v[3]
+
+                if v[10] > best_diff:
+                    best_diff = v[10]
+
+                self.dbc.execute("insert into shares_mm " +\
+                        "(time,rem_host,username,our_result,upstream_result,reason,solution,block_num,prev_block_hash,useragent,difficulty) " +\
+                        "VALUES (to_timestamp(%s),%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                        (v[4],v[6],v[0],bool(v[5]),False,v[9],'',v[7],v[8],'',v[3]) )
+            else :
+                self.dbc.execute("insert into shares_mm (time,rem_host,username,our_result,upstream_result,reason,solution) VALUES " +\
+                        "(to_timestamp(%s),%s,%s,%s,%s,%s,%s)",
+                        (v[4],v[6],v[0],bool(v[5]),False,v[9],'') )
+
+        if settings.DATABASE_EXTEND :
+            self.dbc.execute("select value from pool where parameter = 'round_shares'")
+            round_shares = int(self.dbc.fetchone()[0]) + total_shares
+            self.dbc.execute("update pool set value = %s where parameter = 'round_shares'",[round_shares])
+
+            self.dbc.execute("select value from pool where parameter = 'round_best_share'")
+            round_best_share = int(self.dbc.fetchone()[0])
+            if best_diff > round_best_share:
+                self.dbc.execute("update pool set value = %s where parameter = 'round_best_share'",[best_diff])
+
+            self.dbc.execute("select value from pool where parameter = 'bitcoin_difficulty'")
+            difficulty = float(self.dbc.fetchone()[0])
+
+            if difficulty == 0:
+                progress = 0
+            else:
+                    progress = (round_shares/difficulty)*100
+            self.dbc.execute("update pool set value = %s where parameter = 'round_progress'",[progress])
+        
+            for k,v in checkin_times.items():
+                self.dbc.execute("update pool_worker set last_checkin = to_timestamp(%s), total_shares = total_shares + %s, total_rejects = total_rejects + %s where username = %s",
+                        (v["time"],v["shares"],v["rejects"],k))
+
+        self.dbh.commit()
+
+
     def found_block(self,data):
         # Note: difficulty = -1 here
         self.dbc.execute("update shares set upstream_result = %s, solution = %s where id in (select id from shares where time = to_timestamp(%s) and username = %s limit 1)",
