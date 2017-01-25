@@ -56,10 +56,7 @@ def uint256_from_str_be(s):
 
 def uint256_from_compact(c):
     nbytes = (c >> 24) & 0xFF
-    if nbytes <= 3:
-        v = (c & 0xFFFFFFL) >> (8 * (3 - nbytes))
-    else:
-        v = (c & 0xFFFFFFL) << (8 * (nbytes - 3))
+    v = (c & 0xFFFFFFL) << (8 * (nbytes - 3))
     return v
 
 def deser_vector(f, c):
@@ -214,53 +211,37 @@ def ser_number(n):
     s.append(n)
     return bytes(s)
 
+def to_varint(n):
+    s = bytearray()
+    if(n<0xfd):
+        s.append(n)
+    elif (n<0xffff):
+        s.append(0xfd)
+        s.append(n%256)
+        n=n//256
+        s.append(n)
+    elif(n<0xffffffff):
+        s.append(0xfe)
+        while(n>256):
+            s.append(n%256)
+            n=n//256
+        s.append(n)
+    return bytes(s)
 
-def isPrime( n ):
-    if pow( 2, n-1, n ) == 1:
-        return True
-    return False
+def flip(s):
+    if len(s) % 4 != 0:
+        raise ValueError('string length not multiple of 4')
+    s = binascii.unhexlify(s)
+    f = '{}L'.format(len(s)//4)
+    dw = struct.unpack('>'+f,s)
+    s = struct.pack('<'+f,*dw)
+    return binascii.hexlify(s)
 
-def riecoinPoW( hash_int, diff, nNonce ):
-    base = 1 << 8
-    for i in range(256):
-        base = base << 1
-        base = base | (hash_int & 1)
-        hash_int = hash_int >> 1
-    trailingZeros = diff - 1 - 8 - 256
-    if trailingZeros < 16 or trailingZeros > 20000:
-        return 0
-    base = base << trailingZeros
-    
-    base += nNonce
-    
-    if (base % 210) != 97:
-        return 0
-    
-    if not isPrime( base ):
-        return 0
-    primes = 1
-    
-    base += 4
-    if isPrime( base ):
-        primes+=1
-    
-    base += 2
-    if isPrime( base ):
-        primes+=1
-    
-    base += 4
-    if isPrime( base ):
-        primes+=1
-    
-    base += 2
-    if isPrime( base ):
-        primes+=1
-    
-    base += 4
-    if isPrime( base ):
-        primes+=1
-      
-    return primes
+def rev(s):
+    b = bytearray.fromhex(s)
+    b.reverse()
+    return bytes(b).encode('hex')
+        
 
 #if settings.COINDAEMON_Reward == 'POW':
 def script_to_address(addr):

@@ -273,6 +273,123 @@ class DB_Mysql_Extended(DB_Mysql.DB_Mysql):
         
         self.dbh.commit()
 
+  def mimport_shares(self, data):
+        log.debug("Importing MM Shares")
+        checkin_times = {}
+        total_shares = 0
+        best_diff = 0
+        
+        for k, v in enumerate(data):
+            total_shares += v[3]
+            
+            if v[0] in checkin_times:
+                if v[4] > checkin_times[v[0]]:
+                    checkin_times[v[0]]["time"] = v[4]
+            else:
+                checkin_times[v[0]] = {
+                    "time": v[4], 
+                    "shares": 0, 
+                    "rejects": 0
+                }
+
+            if v[5] == True:
+                checkin_times[v[0]]["shares"] += v[3]
+            else:
+                checkin_times[v[0]]["rejects"] += v[3]
+
+            if v[10] > best_diff:
+                best_diff = v[10]
+
+            self.execute(
+                """
+                INSERT INTO `shares_mm` 
+                (time, rem_host, worker, our_result, upstream_result, 
+                  reason, solution, block_num, prev_block_hash, 
+                  useragent, difficulty) 
+                VALUES
+                (FROM_UNIXTIME(%(time)s), %(host)s, 
+                  (SELECT `id` FROM `pool_worker` WHERE `username` = %(uname)s),
+                  %(lres)s, 0, %(reason)s, %(solution)s, 
+                  %(blocknum)s, %(hash)s, '', %(difficulty)s)
+                """,
+                {
+                    "time": v[4],
+                    "host": v[6],
+                    "uname": v[0],
+                    "lres": v[5],
+                    "reason": v[9],
+                    "solution": v[2],
+                    "blocknum": v[7],
+                    "hash": v[8],
+                    "difficulty": v[3]
+                }
+            )
+
+        self.execute(
+            """
+            SELECT `parameter`, `value` 
+            FROM `pool` 
+            WHERE `parameter` = 'round_best_share'
+              OR `parameter` = 'round_shares'
+              OR `parameter` = 'bitcoin_difficulty'
+              OR `parameter` = 'round_progress'
+            """
+        )
+            
+        current_parameters = {}
+        
+        for data in self.dbc.fetchall():
+            current_parameters[data[0]] = data[1]
+        
+        round_best_share = int(current_parameters['round_best_share'])
+        difficulty = float(current_parameters['bitcoin_difficulty'])
+        round_shares = int(current_parameters['round_shares']) + total_shares
+            
+        updates = [
+            {
+                "param": "round_shares",
+                "value": round_shares
+            },
+            {
+                "param": "round_progress",
+                "value": 0 if difficulty == 0 else (round_shares / difficulty) * 100
+            }
+        ]
+            
+        if best_diff > round_best_share:
+            updates.append({
+                "param": "round_best_share",
+                "value": best_diff
+            })
+        
+        self.executemany(
+            """
+            UPDATE `pool` 
+            SET `value` = %(value)s
+            WHERE `parameter` = %(param)s
+            """,
+            updates
+        )
+    
+        for k, v in checkin_times.items():
+            self.execute(
+                """
+                UPDATE `pool_worker`
+                SET `last_checkin` = FROM_UNIXTIME(%(time)s), 
+                  `total_shares` = `total_shares` + %(shares)s,
+                  `total_rejects` = `total_rejects` + %(rejects)s
+                WHERE `username` = %(uname)s
+                """,
+                {
+                    "time": v["time"],
+                    "shares": v["shares"],
+                    "rejects": v["rejects"], 
+                    "uname": k
+                }
+            )
+        
+        self.dbh.commit()
+
 
     def found_block(self, data):
         # for database compatibility we are converting our_worker to Y/N format

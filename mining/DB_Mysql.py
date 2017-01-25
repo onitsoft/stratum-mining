@@ -52,121 +52,6 @@ class DB_Mysql():
             
             self.dbc.executemany(query, args)
     
-    def import_shares(self, data):
-        # Data layout
-        # 0: worker_name, 
-        # 1: block_header, 
-        # 2: block_hash, 
-        # 3: difficulty, 
-        # 4: timestamp, 
-        # 5: is_valid, 
-        # 6: ip, 
-        # 7: self.block_height, 
-        # 8: self.prev_hash,
-        # 9: invalid_reason, 
-        # 10: share_diff
-
-        log.debug("Importing Shares")
-        checkin_times = {}
-        total_shares = 0
-        best_diff = 0
-        
-        for k, v in enumerate(data):
-            # for database compatibility we are converting our_worker to Y/N format
-            if v[5]:
-                v[5] = 'Y'
-            else:
-                v[5] = 'N'
-
-            self.execute(
-                """
-                INSERT INTO `shares`
-                (time, rem_host, username, our_result, 
-                  upstream_result, reason, solution, difficulty)
-                VALUES 
-                (FROM_UNIXTIME(%(time)s), %(host)s, 
-                  %(uname)s, 
-                  %(lres)s, 'N', %(reason)s, %(solution)s, %(difficulty)s)
-                """,
-                {
-                    "time": v[4], 
-                    "host": v[6], 
-                    "uname": v[0], 
-                    "lres": v[5], 
-                    "reason": v[9],
-                    "solution": v[2],
-                    "difficulty": v[3]
-                }
-            )
-
-            self.dbh.commit()
-
-
-    def found_block(self, data):
-        # for database compatibility we are converting our_worker to Y/N format
-        if data[5]:
-            data[5] = 'Y'
-        else:
-            data[5] = 'N'
-
-        # Check for the share in the database before updating it
-        # Note: We can't use DUPLICATE KEY because solution is not a key
-
-        self.execute(
-            """
-            Select `id` from `shares`
-            WHERE `solution` = %(solution)s
-            LIMIT 1
-            """,
-            {
-                "solution": data[2]
-            }
-        )
-
-        shareid = self.dbc.fetchone()
-
-        if shareid[0] > 0:
-            # Note: difficulty = -1 here
-            self.execute(
-                """
-                UPDATE `shares`
-                SET `upstream_result` = %(result)s
-                WHERE `solution` = %(solution)s
-                AND `id` = %(id)s
-                LIMIT 1
-                """,
-                {
-                    "result": data[5], 
-                    "solution": data[2],
-                    "id": shareid[0]
-                }
-            )
-            
-            self.dbh.commit()
-        else:
-            self.execute(
-                """
-                INSERT INTO `shares`
-                (time, rem_host, username, our_result, 
-                  upstream_result, reason, solution)
-                VALUES 
-                (FROM_UNIXTIME(%(time)s), %(host)s, 
-                  %(uname)s, 
-                  %(lres)s, %(result)s, %(reason)s, %(solution)s)
-                """,
-                {
-                    "time": data[4],
-                    "host": data[6],
-                    "uname": data[0],
-                    "lres": data[5],
-                    "result": data[5],
-                    "reason": data[9],
-                    "solution": data[2]
-                }
-            )
-
-            self.dbh.commit()
-
         
     def list_users(self):
         self.execute(
@@ -342,13 +227,28 @@ class DB_Mysql():
             }
             
         return ret
-
+    def get_uid(self, id_or_username):
+        log.debug("Finding user id of %s", id_or_username)
+        uname = id_or_username.split(".", 1)[0]
+        self.execute("SELECT `id` FROM `accounts` where username = %s", (uname))
+        row = self.dbc.fetchone()
+        
+       
+        if row is None:
+            return False
+        else:
+            uid = row[0]
+            return uid
+    
+    
     def insert_worker(self, account_id, username, password):
         log.debug("Adding new worker %s", username)
         query = "INSERT INTO pool_worker"
         self.execute(query + '(account_id, username, password) VALUES (%s, %s, %s);', (account_id, username, password))
         self.dbh.commit()
         return str(username)
+        
+
 
     def close(self):
         self.dbh.close()

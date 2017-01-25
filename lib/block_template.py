@@ -65,28 +65,26 @@ class BlockTemplate(halfnode.CBlock):
             coinbase = CoinbaseTransactionPOS(self.timestamper, self.coinbaser, data['coinbasevalue'],
                                               data['coinbaseaux']['flags'], data['height'],
                                               settings.COINBASE_EXTRAS+mm_script, data['curtime'])
-
+            
         self.height = data['height']
         self.nVersion = data['version']
         self.hashPrevBlock = int(data['previousblockhash'], 16)
         self.nBits = int(data['bits'], 16)
-
         self.hashMerkleRoot = 0
         self.nTime = 0
         self.nNonce = 0
         self.vtx = [ coinbase, ]
         
-        for tx in data['transactions']:
-            t = halfnode.CTransaction()
-            t.deserialize(StringIO.StringIO(binascii.unhexlify(tx['data'])))
-            self.vtx.append(t)
+        # for tx in data['transactions']:
+        #     t = halfnode.CTransaction()
+        #     t.deserialize(StringIO.StringIO(binascii.unhexlify(tx['data'])))
+        #     self.vtx.append(t)
             
         self.curtime = data['curtime']
         self.timedelta = self.curtime - int(self.timestamper.time()) 
         self.merkletree = mt
         self.target = util.uint256_from_compact(self.nBits)
         self.mm_target = mm_target
-        
         # Reversed prevhash
         self.prevhash_bin = binascii.unhexlify(util.reverse_hash(data['previousblockhash']))
         self.prevhash_hex = "%064x" % self.hashPrevBlock
@@ -142,12 +140,8 @@ class BlockTemplate(halfnode.CBlock):
         r  = struct.pack(">i", self.nVersion)
         r += self.prevhash_bin
         r += util.ser_uint256_be(merkle_root_int)
-        if settings.COINDAEMON_ALGO == 'riecoin':
-            r += struct.pack(">I", self.nBits)
-            r += ntime_bin
-        else:
-            r += ntime_bin
-            r += struct.pack(">I", self.nBits)
+        r += ntime_bin
+        r += struct.pack(">I", self.nBits)
         r += nonce_bin    
         return r       
 

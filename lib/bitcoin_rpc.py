@@ -129,7 +129,7 @@ class BitcoinRPC(object):
     @defer.inlineCallbacks
     def getblocktemplate(self):
         try:
-            resp = (yield self._call('getblocktemplate', [{}]))
+            resp = (yield self._call('getblocktemplate', [{'mode':'template','rules':['segwit']}]))
             defer.returnValue(json.loads(resp)['result'])
         # if internal server error try getblocktemplate without empty {} # ppcoin
         except Exception as e:
@@ -145,10 +145,8 @@ class BitcoinRPC(object):
             try:
                 if algo==0:
                     resp = (yield self._call('getauxblock', []))
-		    log.debug("AUX HASH %s" % str(resp))
                 else:
                     resp = (yield self._call('getauxblock', ['1',]))
-		    log.debug("AUX HASH %s" % str(resp))
                 defer.returnValue(json.loads(resp)['result'])
             except Exception as e:
                 raise
@@ -159,12 +157,15 @@ class BitcoinRPC(object):
                 defer.returnValue(result)
             except Exception as e:
                 raise
+        
                                                   
     @defer.inlineCallbacks
     def prevhash(self):
-        resp = (yield self._call('getwork', []))
+        resp = (yield self._call('getbestblockhash', []))
         try:
-            defer.returnValue(json.loads(resp)['result']['data'][8:72])
+            ph = json.loads(resp)['result']
+            print 'prevhash: ' + ph
+            defer.returnValue(ph)
         except Exception as e:
             log.exception("Cannot decode prevhash %s" % str(e))
             raise

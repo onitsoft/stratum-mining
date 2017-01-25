@@ -34,7 +34,6 @@ class CoinbaseTransactionPOW(halfnode.CTransaction):
         )
                 
         tx_in.scriptSig = tx_in._scriptSig_template[0] + self.extranonce_placeholder + tx_in._scriptSig_template[1]
-    
         tx_out = halfnode.CTxOut()
         tx_out.nValue = value
         tx_out.scriptPubKey = coinbaser.get_script_pubkey()
@@ -50,9 +49,10 @@ class CoinbaseTransactionPOW(halfnode.CTransaction):
     def set_extranonce(self, extranonce):
         if len(extranonce) != self.extranonce_size:
             raise Exception("Incorrect extranonce size")
-        
         (part1, part2) = self.vin[0]._scriptSig_template
         self.vin[0].scriptSig = part1 + extranonce + part2
+
+        
 #elif settings.COINDAEMON_Reward == 'POS':
 class CoinbaseTransactionPOS(halfnode.CTransaction):
     '''Construct special transaction used for coinbase tx.

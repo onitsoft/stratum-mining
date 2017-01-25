@@ -88,7 +88,7 @@ class MiningService(GenericService):
             else:
                 session['difficulty'] = settings.POOL_TARGET
             # worker_log = (valid, invalid, is_banned, diff, is_ext_diff, timestamp)
-            Interfaces.worker_manager.worker_log['authorized'][worker_name] = (0, 0, False, session['difficulty'], is_ext_diff, Interfaces.timestamper.time())
+            Interfaces.worker_manager.worker_log['authorized'][worker_name] = (0, 0, False, session['difficulty'], is_ext_diff, Interfaces.timestamper.time())            
             return True
         else:
             ip = self.connection_ref()._get_ip()
@@ -188,12 +188,13 @@ class MiningService(GenericService):
 
         if is_banned:
             raise SubmitException("Worker is temporarily banned")
- 
+
+
         Interfaces.share_manager.on_submit_share(worker_name, block_header,
             block_hash, difficulty, submit_time, True, ip, '', share_diff)
-
         Interfaces.share_manager.on_submit_mmshare(worker_name, block_header,
             mm_hash, difficulty, submit_time, True, ip, '', share_diff)
+
 
         if on_submit != None:
             # Pool performs submitblock() to litecoind. Let's hook
@@ -205,6 +206,7 @@ class MiningService(GenericService):
             mm_submit.addCallback(Interfaces.share_manager.on_submit_mmblock,
                 worker_name, block_header, mm_hash, submit_time, ip, share_diff)
             
+
         return True
             
     # Service documentation for remote discovery
