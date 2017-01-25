@@ -69,6 +69,8 @@ def setup(on_startup):
                         if 'proof-of-stake' in result: 
                             settings.COINDAEMON_Reward = 'POS'
                             log.info("Coin detected as POS")
+                            log.info("POS is Disabled")
+                            settings.COINDAEMON_Reward = 'POW'
                             break
                     else:
                         settings.COINDAEMON_Reward = 'POW'
