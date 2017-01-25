@@ -161,11 +161,9 @@ class BitcoinRPC(object):
                                                   
     @defer.inlineCallbacks
     def prevhash(self):
-        resp = (yield self._call('getbestblockhash', []))
+        resp = (yield self._call('getwork', []))
         try:
-            ph = json.loads(resp)['result']
-            print 'prevhash: ' + ph
-            defer.returnValue(ph)
+            defer.returnValue(json.loads(resp)['result']['data'][8:72])
         except Exception as e:
             log.exception("Cannot decode prevhash %s" % str(e))
             raise
